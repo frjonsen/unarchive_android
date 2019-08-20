@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ssh/ssh.dart';
+import 'package:unarchive_android/ssh_browser.dart';
+import 'package:unarchive_android/ssh_connections.dart';
 
 import 'key_manager.dart';
 
@@ -25,21 +27,36 @@ class MyApp extends StatefulWidget {
 class MyAppState extends State<MyApp> {
   final _keyManager = KeyManager();
   final _biggerFont = TextStyle(fontSize: 18.0);
-  static const PREVIOUS_CONNECTIONS_KEY = "PREVIOUS_CONNECTIONS_KEY";
-  final List<String> _previousConnections = [];
-  String addressInput;
+  SSHClient _client;
 
   Future<String> _getKeyFile() async {
     var file =
         await FilePicker.getFile(type: FileType.CUSTOM, fileExtension: 'key');
     var keyContents = await file.readAsString();
-    print(keyContents);
     return keyContents;
   }
 
   Future<void> _setNewKeyHandler() async {
     var key = await _getKeyFile();
     await _keyManager.addKey(key);
+  }
+
+  void _onConnect(String username, String address) async {
+    var client = new SSHClient(
+        host: address,
+        port: 22,
+        username: username,
+        passwordOrKey: {"privateKey": await _keyManager.getKey()});
+    await client.connect();
+    setState(() {
+      _client = client;
+    });
+    _navigateToBrowser();
+  }
+
+  void _navigateToBrowser() {
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (context) => SshBrowser(_client)));
   }
 
   Widget _buildDrawer() {
@@ -53,71 +70,33 @@ class MyAppState extends State<MyApp> {
     return Drawer(child: menu);
   }
 
-  Future<void> connect() async {
-    if (addressInput == null || addressInput.length == 0) return;
-    if (!_previousConnections.contains(addressInput)) {
-      final prefs = await SharedPreferences.getInstance();
-      _previousConnections.add(addressInput);
-      prefs.setStringList(PREVIOUS_CONNECTIONS_KEY, _previousConnections);
-
-      setState(() {});
+  Future<void> _disconnect() async {
+    if (_client != null) {
+      _client.disconnect();
     }
-  }
-
-  Widget _buildNewConnectionRow() {
-    var addressField = TextField(
-      autocorrect: false,
-      decoration: InputDecoration(labelText: 'Address'),
-      onChanged: (s) {
-        addressInput = s;
-      },
-    );
-    var connectButton = IconButton(icon: Icon(Icons.send), onPressed: connect);
-    return ListTile(title: addressField, trailing: connectButton);
-  }
-
-  Future<List<String>> _getPreviousConnections() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getStringList(PREVIOUS_CONNECTIONS_KEY);
-  }
-
-  Widget _buildConnectionList() {
-    var previousConnectionsTitle =
-        ListTile(title: Text("Previous connections"));
-    var connections = _previousConnections
-        .map((c) => ListTile(title: Text(c, style: _biggerFont)));
-    var tiles =
-        ListTile.divideTiles(tiles: connections, context: context).toList();
-
-    return ListView(
-      children: <Widget>[
-        _buildNewConnectionRow(),
-        previousConnectionsTitle,
-        ...tiles
-      ],
-    );
+    setState(() {
+      _client = null;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    List<Widget> actions = [];
+    if (_client != null) {
+      actions.add(IconButton(
+        icon: Icon(Icons.stop),
+        onPressed: _disconnect,
+      ));
+      actions.add(
+          IconButton(icon: Icon(Icons.folder), onPressed: _navigateToBrowser));
+    }
     final scaffold = Scaffold(
-        appBar: AppBar(title: Text("Connect to server")),
+        appBar: AppBar(
+          title: Text("Connect to server"),
+          actions: actions,
+        ),
         drawer: _buildDrawer(),
-        body: _buildConnectionList());
+        body: SshConnections(_onConnect));
     return scaffold;
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _getPreviousConnections().then((result) {
-      if (result == null || result.length == 0) return;
-      if (result.length != _previousConnections.length) {
-        setState(() {
-          _previousConnections.clear();
-          _previousConnections.addAll(result);
-        });
-      }
-    });
   }
 }

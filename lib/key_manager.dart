@@ -21,8 +21,6 @@ class KeyManager {
     var authenticated = await _verifyBiometrics();
     if (!authenticated) return null;
     final storage = new FlutterSecureStorage();
-    var key = await storage.read(key: KEY_STORAGE_KEY);
-    print(key);
-    return key;
+    return await storage.read(key: KEY_STORAGE_KEY);
   }
 }
