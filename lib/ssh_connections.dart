@@ -6,7 +6,7 @@ class SshConnectionsState extends State<SshConnections> {
   final List<String> _previousConnections = [];
   final _biggerFont = TextStyle(fontSize: 18.0);
   String addressInput;
-  final void Function(String, String) _onConnect;
+  final void Function(BuildContext context, String, String) _onConnect;
 
   Future<void> connect(String address) async {
     if (address == null || address.length == 0) return;
@@ -25,7 +25,7 @@ class SshConnectionsState extends State<SshConnections> {
       prefs.setStringList(PREVIOUS_CONNECTIONS_KEY, _previousConnections);
     }
 
-    _onConnect(input[0], input[1]);
+    _onConnect(context, input[0], input[1]);
   }
 
   Widget _buildNewConnectionRow() {
@@ -66,10 +66,11 @@ class SshConnectionsState extends State<SshConnections> {
   Widget build(BuildContext context) {
     var previousConnectionsTitle =
         ListTile(title: Text("Previous connections"));
-    var connections = _previousConnections.map((c) => ListTile(
+    var connections = _previousConnections.map((c) => Card(
+            child: ListTile(
           title: Text(c, style: _biggerFont),
           onTap: () => connect(c),
-        ));
+        )));
     var tiles =
         ListTile.divideTiles(tiles: connections, context: context).toList();
 
@@ -84,7 +85,7 @@ class SshConnectionsState extends State<SshConnections> {
 }
 
 class SshConnections extends StatefulWidget {
-  final void Function(String, String) _onConnect;
+  final void Function(BuildContext context, String, String) _onConnect;
 
   @override
   State<StatefulWidget> createState() {

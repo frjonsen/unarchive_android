@@ -41,17 +41,31 @@ class MyAppState extends State<MyApp> {
     await _keyManager.addKey(key);
   }
 
-  void _onConnect(String username, String address) async {
+  void _onConnect(BuildContext context, String username, String address) async {
     var client = new SSHClient(
         host: address,
         port: 22,
         username: username,
         passwordOrKey: {"privateKey": await _keyManager.getKey()});
-    await client.connect();
-    setState(() {
-      _client = client;
-    });
-    _navigateToBrowser();
+    try {
+      var result = await client.connect();
+      if (result == 'session_connected') {
+        setState(() {
+          _client = client;
+        });
+        // Can't show a message on success, because the navigation will
+        // replace the scaffold and hide the snackbar
+        _navigateToBrowser();
+      } else {
+        Scaffold.of(context).showSnackBar(SnackBar(
+          content: Text("Server found, but failed to connect"),
+        ));
+      }
+    } catch (e) {
+      Scaffold.of(context).showSnackBar(SnackBar(
+        content: Text("Unknown host"),
+      ));
+    }
   }
 
   void _navigateToBrowser() {
