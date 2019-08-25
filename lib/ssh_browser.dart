@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ssh/ssh.dart';
 import 'package:unarchive_android/set_path_dialog.dart';
+import 'package:unarchive_android/unpack_dialog.dart';
+import 'package:unarchive_android/unpack_type.dart';
 
 import 'log_viewer.dart';
 
@@ -73,6 +75,14 @@ class SshBrowserState extends State<SshBrowser> {
     });
   }
 
+  Future<void> _handleUnpack(String path) async {
+    UnpackType type = await showDialog<UnpackType>(
+        context: context, builder: (BuildContext context) => UnpackDialog());
+    var fullPath = "$_currentPath/$path";
+    var unarchiveOpts = type == UnpackType.tv ? "unarchive" : "unarchive -m";
+    await _executeWithLog("cd $fullPath && bash -l -c $unarchiveOpts");
+  }
+
   Future<void> _updatePwd(String toPath) async {
     var newPath = toPath.startsWith("/") ? toPath : "$_currentPath/$toPath";
     var path = _currentPath == "/" ? toPath : newPath;
@@ -95,6 +105,7 @@ class SshBrowserState extends State<SshBrowser> {
           child: ListTile(
             title: Text(c),
             onTap: () => _updatePwd(c),
+            onLongPress: () => _handleUnpack(c),
           ),
         ));
     return ListView(
