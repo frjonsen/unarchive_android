@@ -33,8 +33,10 @@ class SshBrowserState extends State<SshBrowser> {
   }
 
   Future<void> _updatePwd(String relativePath) async {
-    var pwd = await _executeWithLog("cd $_currentPath/$relativePath && pwd");
-    print("Pwd: $pwd");
+    var path = _currentPath == "/"
+        ? relativePath
+        : "cd $_currentPath/$relativePath && pwd";
+    var pwd = await _executeWithLog(path);
     setState(() {
       _currentPath = pwd.trim();
       _updateContents();
@@ -67,7 +69,7 @@ class SshBrowserState extends State<SshBrowser> {
 
   Future<List<String>> _ls() async {
     var contents = await _client.execute("ls -1F $_currentPath | grep -G /\$");
-    return contents.trim().split('\n');
+    return contents.trim().split(new RegExp(r"\r?\n"));
   }
 
   @override
