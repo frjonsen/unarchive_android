@@ -1,28 +1,69 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ssh/ssh.dart';
+import 'package:unarchive_android/set_path_dialog.dart';
 
 import 'log_viewer.dart';
 
 class SshBrowserState extends State<SshBrowser> {
+  static const FAVORITE_PATH_KEY = "FAVORITE_PATH_KEY";
   final SSHClient _client;
   final List<String> _sshLog = [];
   List<String> _currentPathContents = [];
+  String _favoritePath;
   String _currentPath;
   @override
   Widget build(BuildContext context) {
-    final logButton = IconButton(
+    var actions = <Widget>[
+      IconButton(
+        icon: Icon(Icons.edit),
+        onPressed: _handleEditPath,
+      ),
+      IconButton(icon: Icon(Icons.favorite), onPressed: _handleSetFavoritePath),
+    ];
+    if (_favoritePath != null && _favoritePath != "") {
+      actions.add(IconButton(
+        icon: Icon(Icons.folder),
+        onPressed: () => _updatePwd(_favoritePath),
+      ));
+    }
+    actions.add(IconButton(
       icon: Icon(Icons.announcement),
       onPressed: () {
         Navigator.of(context)
             .push(MaterialPageRoute(builder: (context) => LogViewer(_sshLog)));
       },
-    );
+    ));
     return Scaffold(
-        appBar: AppBar(
-          title: Text(_currentPath ?? ""),
-          actions: <Widget>[logButton],
-        ),
+        appBar: AppBar(title: Text(_getCurrentDir()), actions: actions),
         body: _buildDirList());
+  }
+
+  String _getCurrentDir() {
+    return _currentPath.split("/").last;
+  }
+
+  Future<void> _handleSetFavoritePath() async {
+    var prefs = await SharedPreferences.getInstance();
+    await prefs.setString(FAVORITE_PATH_KEY, _currentPath);
+    setState(() {
+      _favoritePath = _currentPath;
+    });
+  }
+
+  Future<String> _getFavoritePath() async {
+    var prefs = await SharedPreferences.getInstance();
+    return prefs.getString(FAVORITE_PATH_KEY);
+  }
+
+  Future<void> _handleEditPath() async {
+    String path = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) => SetPathDialog());
+    if (path != null) {
+      _updatePwd(path);
+    }
   }
 
   Future<void> _updateContents() async {
@@ -32,11 +73,12 @@ class SshBrowserState extends State<SshBrowser> {
     });
   }
 
-  Future<void> _updatePwd(String relativePath) async {
-    var path = _currentPath == "/"
-        ? relativePath
-        : "cd $_currentPath/$relativePath && pwd";
-    var pwd = await _executeWithLog(path);
+  Future<void> _updatePwd(String toPath) async {
+    var newPath = toPath.startsWith("/") ? toPath : "$_currentPath/$toPath";
+    var path = _currentPath == "/" ? toPath : newPath;
+    var pwd = await _executeWithLog("cd $path && pwd");
+    // If pwd is empty it's most likely because cd failed
+    if (pwd.trim() == "") return;
     setState(() {
       _currentPath = pwd.trim();
       _updateContents();
@@ -79,6 +121,13 @@ class SshBrowserState extends State<SshBrowser> {
           _currentPath = r.trim();
           _updateContents();
         }));
+    _getFavoritePath().then((r) {
+      if (r != null) {
+        setState(() {
+          _favoritePath = r;
+        });
+      }
+    });
   }
 
   SshBrowserState(this._client);
